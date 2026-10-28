@@ -19,7 +19,7 @@ import logging
 
 from rag.loaders.pdf_loader import load_pdf
 from rag.indexes.vector_index import build_index_for_document
-from rag.indexes.chroma_store import delete_collection
+from rag.indexes.chroma_store import delete_collection, delete_document_vectors
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,13 @@ class IngestionService:
             logger.error("Failed to load PDF: %s", document.file.path)
             self._mark_agent_error()
             return False
+
+        # Tag every chunk with its Document row so it can be removed on its own later.
+        # Kept out of the embedding and LLM text: it's a lookup key, not content.
+        for doc in documents:
+            doc.metadata["document_id"] = str(document.id)
+            doc.excluded_embed_metadata_keys.append("document_id")
+            doc.excluded_llm_metadata_keys.append("document_id")
 
         # Step 2: Embed and append to ChromaDB (incremental, not full rebuild)
         try:
@@ -96,6 +103,25 @@ class IngestionService:
                 all_ok = False
 
         return all_ok
+
+    def delete_document(self, document) -> int:
+        """
+        Remove one document: its vectors, its PDF on disk and its row.
+        The agent's status is recomputed from what is left. Returns chunks removed.
+        """
+        removed = delete_document_vectors(self.collection_name, str(document.id), document.file.path)
+        document.file.delete(save=False)
+        document.delete()
+
+        remaining = self.agent.documents.count()
+        if remaining == 0:
+            # Nothing left to chat with.
+            self.agent.is_indexed = False
+            self.agent.indexing_status = "idle"
+            self.agent.save(update_fields=["is_indexed", "indexing_status"])
+        else:
+            self._update_agent_status()
+        return removed
 
     def _update_agent_status(self):
         """

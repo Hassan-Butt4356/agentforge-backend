@@ -22,15 +22,18 @@ class ConversationSerializer(serializers.ModelSerializer):
 
 
 class ConversationListSerializer(serializers.ModelSerializer):
+    agent_id = serializers.UUIDField(source="agent.id", read_only=True)
     agent_name = serializers.CharField(source="agent.name", read_only=True)
     message_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
-        fields = ["id", "agent_name", "title", "message_count", "created_at"]
+        fields = ["id", "agent_id", "agent_name", "title", "message_count", "created_at"]
 
     def get_message_count(self, obj) -> int:
-        return obj.messages.count()
+        # List views annotate the count (one query); fall back for unannotated objects.
+        annotated = getattr(obj, "n_messages", None)
+        return annotated if annotated is not None else obj.messages.count()
 
 
 class ChatInputSerializer(serializers.Serializer):

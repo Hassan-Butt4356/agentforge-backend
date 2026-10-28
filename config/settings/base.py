@@ -127,7 +127,9 @@ SPECTACULAR_SETTINGS = {
 
 # ── SimpleJWT ──────────────────────────────────────────────────
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=2),
+    # Short-lived: a password change or logout cuts off other devices within this window.
+    # The frontend refreshes silently with the 7-day refresh token, so users stay signed in.
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=config("JWT_ACCESS_MINUTES", default=15, cast=int)),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,     # old refresh tokens stop working after rotation

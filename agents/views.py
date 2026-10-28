@@ -1,7 +1,8 @@
 import logging
 
 from django.db.models import Q
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
@@ -184,6 +185,37 @@ class AgentViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_202_ACCEPTED,
         )
+
+    # ── Delete one document ───────────────────────────────────
+    @extend_schema(
+        parameters=[OpenApiParameter("doc_id", OpenApiTypes.UUID, OpenApiParameter.PATH)],
+        responses={204: None},
+    )
+    @action(detail=True, methods=["delete"], url_path=r"documents/(?P<doc_id>[0-9a-fA-F-]{36})")
+    def delete_document(self, request, pk=None, doc_id=None):
+        """
+        DELETE /api/agents/{id}/documents/{doc_id}/
+        Removes one PDF, its chunks in ChromaDB and its row; the agent stays.
+        Refused (409) while that document is still being embedded, so the worker
+        can't write its vectors back after the delete.
+        """
+        from rag.services.ingestion_service import IngestionService
+
+        agent = self.get_object()
+        if agent.owner != request.user:
+            return Response({"detail": "Only the owner can delete documents."}, status=403)
+
+        document = agent.documents.filter(id=doc_id).first()
+        if document is None:
+            return Response({"detail": "Document not found."}, status=404)
+        if not document.ingested and agent.indexing_status == "indexing":
+            return Response(
+                {"detail": "This document is still being embedded. Delete it once indexing finishes."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        IngestionService(agent).delete_document(document)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     # ── Reindex (wipe + rebuild from scratch) ─────────────────
     @extend_schema(request=None, responses={202: inline_serializer("ReindexResponse", {

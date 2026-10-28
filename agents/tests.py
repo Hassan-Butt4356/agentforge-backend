@@ -118,3 +118,62 @@ class AgentTests(TestCase):
         path = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, path, ignore_errors=True)
         return path
+
+
+class DocumentDeleteTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(username="owner", password="pass1234")
+        self.other = User.objects.create_user(username="other", password="pass1234")
+        self.agent = Agent.objects.create(name="A", owner=self.owner, is_public=True, is_indexed=True, indexing_status="ready")
+        self.doc = Document.objects.create(agent=self.agent, file="pdfs/a.pdf", filename="a.pdf", ingested=True)
+
+    def _url(self, doc_id=None):
+        return f"/api/agents/{self.agent.id}/documents/{doc_id or self.doc.id}/"
+
+    @patch("rag.services.ingestion_service.delete_document_vectors", return_value=3)
+    def test_owner_deletes_last_document_and_agent_goes_idle(self, mock_vectors):
+        self.client.force_authenticate(user=self.owner)
+        res = self.client.delete(self._url())
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Document.objects.filter(id=self.doc.id).exists())
+        mock_vectors.assert_called_once()
+        self.assertEqual(mock_vectors.call_args.args[1], str(self.doc.id))
+        self.agent.refresh_from_db()
+        self.assertEqual((self.agent.indexing_status, self.agent.is_indexed), ("idle", False))
+
+    @patch("rag.services.ingestion_service.delete_document_vectors", return_value=2)
+    def test_deleting_one_of_several_keeps_agent_ready(self, _):
+        Document.objects.create(agent=self.agent, file="pdfs/b.pdf", filename="b.pdf", ingested=True)
+        self.client.force_authenticate(user=self.owner)
+        self.assertEqual(self.client.delete(self._url()).status_code, status.HTTP_204_NO_CONTENT)
+        self.agent.refresh_from_db()
+        self.assertEqual((self.agent.indexing_status, self.agent.is_indexed), ("ready", True))
+
+    @patch("rag.services.ingestion_service.delete_document_vectors", return_value=0)
+    def test_deleting_the_broken_document_clears_error(self, _):
+        self.agent.indexing_status = "error"
+        self.agent.save()
+        broken = Document.objects.create(agent=self.agent, file="pdfs/bad.pdf", filename="bad.pdf", ingested=False)
+        self.client.force_authenticate(user=self.owner)
+        self.assertEqual(self.client.delete(self._url(broken.id)).status_code, status.HTTP_204_NO_CONTENT)
+        self.agent.refresh_from_db()
+        self.assertEqual(self.agent.indexing_status, "ready")
+
+    def test_cannot_delete_while_embedding(self):
+        self.agent.indexing_status = "indexing"
+        self.agent.save()
+        pending = Document.objects.create(agent=self.agent, file="pdfs/p.pdf", filename="p.pdf", ingested=False)
+        self.client.force_authenticate(user=self.owner)
+        self.assertEqual(self.client.delete(self._url(pending.id)).status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(Document.objects.filter(id=pending.id).exists())
+
+    def test_non_owner_cannot_delete(self):
+        self.client.force_authenticate(user=self.other)
+        self.assertEqual(self.client.delete(self._url()).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Document.objects.filter(id=self.doc.id).exists())
+
+    def test_unknown_document_is_404(self):
+        self.client.force_authenticate(user=self.owner)
+        res = self.client.delete(self._url("00000000-0000-0000-0000-000000000000"))
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)

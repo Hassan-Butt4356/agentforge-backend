@@ -85,3 +85,27 @@ class ChatTests(TestCase):
         res = self.client.delete(f"/api/conversations/{conv.id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Conversation.objects.filter(id=conv.id).exists())
+
+    def test_all_conversations_lists_only_mine_across_agents(self):
+        other_agent = Agent.objects.create(name="Other", owner=self.user, is_indexed=True)
+        stranger = User.objects.create_user(username="stranger", password="pass1234")
+        Conversation.objects.create(agent=self.agent, user=self.user, title="Mine 1")
+        c2 = Conversation.objects.create(agent=other_agent, user=self.user, title="Mine 2")
+        Message.objects.create(conversation=c2, role="user", content="hi")
+        Message.objects.create(conversation=c2, role="assistant", content="hello")
+        Conversation.objects.create(agent=self.agent, user=stranger, title="Not mine")
+
+        res = self.client.get("/api/conversations/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["count"], 2)
+        by_title = {c["title"]: c for c in res.data["results"]}
+        self.assertEqual(set(by_title), {"Mine 1", "Mine 2"})
+        self.assertEqual(by_title["Mine 2"]["message_count"], 2)
+        self.assertEqual(str(by_title["Mine 2"]["agent_id"]), str(other_agent.id))
+
+    def test_all_conversations_hides_agents_no_longer_shared(self):
+        owner = User.objects.create_user(username="sharer", password="pass1234")
+        shared = Agent.objects.create(name="Was public", owner=owner, is_public=False)
+        Conversation.objects.create(agent=shared, user=self.user, title="Lost access")
+        res = self.client.get("/api/conversations/")
+        self.assertEqual(res.data["count"], 0)

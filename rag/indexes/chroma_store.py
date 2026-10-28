@@ -65,6 +65,27 @@ def get_or_create_collection(collection_name: str) -> chromadb.Collection:
     return collection
 
 
+def delete_document_vectors(collection_name: str, document_id: str, file_path: str) -> int:
+    """
+    Remove every chunk of one document from an agent's collection; returns how many.
+
+    New chunks carry a `document_id` metadata key (set at ingestion). Chunks from
+    before that existed are matched by the `file_path` SimpleDirectoryReader stores.
+    """
+    client = get_chroma_client()
+    try:
+        collection = client.get_collection(collection_name)
+    except Exception:
+        return 0  # nothing was ever indexed for this agent
+
+    before = collection.count()
+    collection.delete(where={"document_id": document_id})
+    collection.delete(where={"file_path": file_path})
+    removed = before - collection.count()
+    logger.info("Removed %d chunk(s) of document %s from '%s'", removed, document_id, collection_name)
+    return removed
+
+
 def delete_collection(collection_name: str) -> None:
     """
     Completely removes a collection and all its vectors.

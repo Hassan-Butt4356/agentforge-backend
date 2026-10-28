@@ -337,6 +337,7 @@ All protected endpoints require: `Authorization: Bearer <access_token>`
 | POST | `/api/auth/login/` | ❌ | Login → tokens |
 | POST | `/api/auth/refresh/` | ❌ | Refresh token (rotates) |
 | POST | `/api/auth/logout/` | ❌ | Blacklist a refresh token |
+| POST | `/api/auth/password/` |   | Change password (signs out other devices) |
 | GET/PUT | `/api/auth/profile/` |   | View / update profile |
 
 ### Agents
@@ -348,6 +349,7 @@ All protected endpoints require: `Authorization: Bearer <access_token>`
 | GET | `/api/agents/my/` |   | Your agents only |
 | GET | `/api/agents/public/` |   | All public agents |
 | POST | `/api/agents/{id}/upload/` |   Owner | Upload PDFs (async) |
+| DELETE | `/api/agents/{id}/documents/{doc_id}/` |   Owner | Delete one PDF and its vectors |
 | POST | `/api/agents/{id}/reindex/` |   Owner | Rebuild index |
 | GET | `/api/agents/{id}/status/` |   | Poll indexing status + document progress |
 
@@ -360,6 +362,7 @@ Interactive docs: **`/api/docs/`** · OpenAPI schema: **`/api/schema/`**
 |---|---|---|---|
 | POST | `/api/agents/{id}/chat/` |   | Send message |
 | GET | `/api/agents/{id}/conversations/` |   | List conversations |
+| GET | `/api/conversations/` |   | All your conversations, across agents |
 | GET/DELETE | `/api/conversations/{id}/` |   | View / delete conversation |
 
 ---

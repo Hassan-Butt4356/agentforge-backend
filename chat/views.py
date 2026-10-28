@@ -1,6 +1,7 @@
 import logging
 
 from drf_spectacular.utils import extend_schema
+from django.db.models import Count, Q
 from rest_framework import status, permissions
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
@@ -114,7 +115,34 @@ class ConversationListView(APIView):
         if not agent.is_public and agent.owner != request.user:
             return Response({"detail": "Access denied."}, status=403)
 
-        conversations = Conversation.objects.filter(agent_id=agent_id, user=request.user)
+        conversations = (
+            Conversation.objects.filter(agent_id=agent_id, user=request.user)
+            .select_related("agent")
+            .annotate(n_messages=Count("messages"))
+        )
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(conversations, request, view=self)
+        return paginator.get_paginated_response(ConversationListSerializer(page, many=True).data)
+
+
+class AllConversationsView(APIView):
+    """
+    GET /api/conversations/
+    Every conversation of the current user across all agents, newest first.
+    Skips agents the user can no longer open (a shared agent made private again).
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = PageNumberPagination
+
+    @extend_schema(responses=ConversationListSerializer(many=True))
+    def get(self, request):
+        conversations = (
+            Conversation.objects.filter(user=request.user)
+            .filter(Q(agent__owner=request.user) | Q(agent__is_public=True))
+            .select_related("agent")
+            .annotate(n_messages=Count("messages"))
+        )
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(conversations, request, view=self)
         return paginator.get_paginated_response(ConversationListSerializer(page, many=True).data)
