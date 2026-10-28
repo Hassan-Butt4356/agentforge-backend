@@ -1,0 +1,128 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AgentForge — Docker Compose (Production)
+# Usage: docker-compose -f docker-compose.prod.yml up -d --build
+#
+# Ollama runs on the host and is reached via host.docker.internal:11434.
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-app-env: &app-env
+  DJANGO_SETTINGS_MODULE: config.settings.production
+  DB_ENGINE: postgres
+  DB_HOST: db
+  REDIS_URL: redis://redis:6379/0
+  OLLAMA_BASE_URL: http://host.docker.internal:11434
+  CHROMA_MODE: http
+  CHROMA_HOST: chromadb
+  CHROMA_PORT: "8000"
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: agentforge_db
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # In production: do NOT expose port 5432 to the host.
+
+  redis:
+    image: redis:7-alpine
+    container_name: agentforge_redis
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  chromadb:
+    image: chromadb/chroma:0.5.3   # pinned to match the chromadb client in requirements.txt
+    container_name: agentforge_chromadb
+    restart: always
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/heartbeat')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agentforge_web
+    restart: always
+    command: sh scripts/entrypoint.sh
+    volumes:
+      - media_volume:/app/media
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    environment: *app-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agentforge_celery
+    restart: always
+    command: celery -A config worker --loglevel=info --concurrency=2
+    volumes:
+      - media_volume:/app/media    # worker reads the PDFs that web saved
+    env_file:
+      - .env
+    environment: *app-env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: agentforge_nginx
+    restart: always
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_volume:/app/staticfiles:ro
+      - media_volume:/app/media:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:
+  chroma_data:
+  media_volume:
+  static_volume:

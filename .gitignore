@@ -1,19 +1,2 @@
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-venv/
-env/
-.env
-!.env.example
-*.log
-db.sqlite3
-staticfiles/
-media/
-chromadb/
-.DS_Store
-.idea/
-.vscode/
-.coverage
-htmlcov/
-.pytest_cache/
+# agentforge-frontend is its own git repo (github.com/Hassan-Butt4356/agentforge-frontend)
+agentforge-frontend/
