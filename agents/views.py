@@ -49,6 +49,10 @@ class AgentViewSet(viewsets.ModelViewSet):
         return AgentSerializer
 
     def get_queryset(self):
+        # Schema generation runs without a real user; give spectacular the model
+        # so it can type the {id} path parameter as a UUID.
+        if getattr(self, "swagger_fake_view", False):
+            return Agent.objects.none()
         user = self.request.user
         return Agent.objects.filter(Q(owner=user) | Q(is_public=True)).distinct()
 

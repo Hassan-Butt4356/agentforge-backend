@@ -17,7 +17,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         model = Conversation
         fields = ["id", "agent_name", "title", "message_count", "messages", "created_at"]
 
-    def get_message_count(self, obj):
+    def get_message_count(self, obj) -> int:
         return obj.messages.count()
 
 
@@ -29,7 +29,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
         model = Conversation
         fields = ["id", "agent_name", "title", "message_count", "created_at"]
 
-    def get_message_count(self, obj):
+    def get_message_count(self, obj) -> int:
         return obj.messages.count()
 
 

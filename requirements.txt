@@ -24,3 +24,4 @@ llama-index-vector-stores-chroma==0.1.10
 
 # ── ChromaDB ───────────────────────────────────────────────────
 chromadb==0.5.3
+posthog<6                         # chromadb 0.5.x calls posthog.capture() with the pre-v6 signature

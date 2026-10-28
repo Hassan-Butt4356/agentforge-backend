@@ -187,5 +187,7 @@ LOGGING = {
     "loggers": {
         "rag": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
         "celery": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        # Telemetry is disabled (rag/indexes/chroma_store.py); silence chromadb's noise about it.
+        "chromadb.telemetry.product.posthog": {"level": "CRITICAL", "propagate": False},
     },
 }

@@ -15,11 +15,15 @@ Two modes controlled by CHROMA_MODE in settings:
 import logging
 
 import chromadb
+from chromadb.config import Settings as ChromaSettings
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
 _chroma_client = None
+
+# AgentForge promises nothing leaves the machine: switch off Chroma's PostHog telemetry.
+_CHROMA_SETTINGS = ChromaSettings(anonymized_telemetry=False)
 
 
 def get_chroma_client() -> chromadb.Client:
@@ -36,11 +40,12 @@ def get_chroma_client() -> chromadb.Client:
         _chroma_client = chromadb.HttpClient(
             host=settings.CHROMA_HOST,
             port=settings.CHROMA_PORT,
+            settings=_CHROMA_SETTINGS,
         )
         logger.info("ChromaDB connected via HTTP at %s:%s", settings.CHROMA_HOST, settings.CHROMA_PORT)
     else:
         # Development: embedded persistent client — writes to ./chromadb/
-        _chroma_client = chromadb.PersistentClient(path=settings.CHROMA_LOCAL_PATH)
+        _chroma_client = chromadb.PersistentClient(path=settings.CHROMA_LOCAL_PATH, settings=_CHROMA_SETTINGS)
         logger.info("ChromaDB PersistentClient at %s", settings.CHROMA_LOCAL_PATH)
 
     return _chroma_client
