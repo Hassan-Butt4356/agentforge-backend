@@ -15,6 +15,8 @@
 
 ---
 
+> Frontend (Next.js + React): [agentforge-frontend](https://github.com/Hassan-Butt4356/agentforge-frontend)
+
 ## What is AgentForge?
 
 AgentForge is a **multi-tenant chatbot platform** where each user creates AI agents powered by their own PDF knowledge bases. Upload documents, and an AI agent answers questions about them using **Retrieval-Augmented Generation (RAG)**.
@@ -162,8 +164,8 @@ Use this when running everything directly on your machine without Docker.
 
 ```bash
 # 1. Clone
-git clone https://github.com/<your-username>/agentforge.git
-cd agentforge/agentforge-backend
+git clone https://github.com/Hassan-Butt4356/agentforge-backend.git
+cd agentforge-backend
 
 # 2. Virtual environment
 python -m venv venv
