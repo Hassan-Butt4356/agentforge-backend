@@ -2,10 +2,20 @@ from rest_framework import serializers
 from .models import Conversation, Message
 
 
+class SourceSerializer(serializers.Serializer):
+    document_id = serializers.UUIDField(allow_null=True)
+    filename = serializers.CharField()
+    page = serializers.CharField(allow_null=True)
+    snippet = serializers.CharField()
+    score = serializers.FloatField(allow_null=True)
+
+
 class MessageSerializer(serializers.ModelSerializer):
+    sources = SourceSerializer(many=True, read_only=True)
+
     class Meta:
         model = Message
-        fields = ["id", "role", "content", "created_at"]
+        fields = ["id", "role", "content", "sources", "created_at"]
 
 
 class ConversationSerializer(serializers.ModelSerializer):
@@ -44,3 +54,4 @@ class ChatInputSerializer(serializers.Serializer):
 class ChatResponseSerializer(serializers.Serializer):
     conversation_id = serializers.UUIDField()
     answer = serializers.CharField()
+    sources = SourceSerializer(many=True)

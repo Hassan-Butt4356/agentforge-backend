@@ -25,6 +25,8 @@ class Message(models.Model):
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="messages")
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     content = models.TextField()
+    # Assistant messages only: [{document_id, filename, page, snippet, score}]
+    sources = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
